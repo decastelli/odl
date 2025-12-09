@@ -163,13 +163,14 @@ class Convolution(odl.Operator):
         """Implement calling the operator by calling scipy."""
         return scipy.signal.fftconvolve(self.kernel.data, x.data, mode='same').real
 
-def inner_rkhs(v, h, kernel=K):
+def inner_rkhs(kernel):
     """Compute <K*v, h> using convolution K * v """
-
-    Kv = Convolution(kernel)(v)
-    space = odl.rn(v.shape, device=v.device, dtype=v.dtype)
-    inner = space.inner(space.element(Kv), space.element(h))
-    return inner
+    def _inner(v, h):
+        Kv = Convolution(kernel)(v)
+        space = kernel.space
+        inner = space.inner(space.element(Kv), space.element(h))
+        return inner
+    return _inner
 
 
 
@@ -180,18 +181,12 @@ if __name__ == '__main__':
     H, W = 64, 64
     impl = 'pytorch'
     device= 'cpu'
-    sigma = 0.1
+    sigma = 0.02
 
     ## We begin by creating the input space
     space = odl.uniform_discr(
         [-1,-1],[1,1],[H, W], impl=impl, device=device
         )
-    K = space.element(lambda x: odl.exp(-x**2/sigma))
-    kernel = Convolution(K)
-    inner = lambda v, h: space.inner(kernel(v), h)
-    V = odl.uniform_discr(
-        [-1,-1],[1,1],[H, W], impl=impl, device=device
-        , inner=inner)
     template, displacement = compute_template_and_displacement(space)
     
     deformation_operator = LinDeformFixedTempl(
@@ -212,12 +207,11 @@ if __name__ == '__main__':
         [-1,-1],[1,1],[H, W], impl=impl, device=device
         )
 
-    G = lambda x: np.exp(-(x[0]**2.0  + x[1]**2)/sigma)
+    G = lambda x: np.exp(-(x[0]**2.0  + x[1]**2)/sigma**2)
 
     K = L2.element(G)
 
-
-    HV = odl.uniform_discr([-1,-1], [1,1], [H, W], impl=impl, device=device, weighting=odl.space_weighting(impl=impl, inner=inner_rkhs))
+    HV = odl.uniform_discr([-1,-1], [1,1], [H, W], impl=impl, device=device, weighting=odl.space_weighting(impl=impl, inner=inner_rkhs(K)))
 
     V = HV.tangent_bundle
     U = space.tangent_bundle
