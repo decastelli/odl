@@ -10,6 +10,9 @@ from odl.trafos.backends.pykeops_bindings import (
 from odl.core.discr import DiscretizedSpace
 from odl.core.array_API_support.utils import lookup_array_backend
 from odl.trafos.deform import LinDeformFixedTempl
+import scipy.signal
+
+
 # The idea would be to design a non linear deformation operator that has a fixed template I0
 
 # then we should develop an ODE solver operator such that given a velocity field v, we could
@@ -150,16 +153,45 @@ def compute_template_and_displacement(space : DiscretizedSpace, epsilon=0.15):
     phi = np.stack((phi_y, phi_x))
     return space.element(I0), space.tangent_bundle.element(phi)
 
+
+class Convolution(odl.Operator):
+    def __init__(self, kernel):
+        self.kernel = kernel
+        super(Convolution, self).__init__(domain=kernel.space, range=kernel.space, linear=True)
+
+    def _call(self, x):
+        """Implement calling the operator by calling scipy."""
+        return scipy.signal.fftconvolve(self.kernel.data, x.data, mode='same').real
+
+def inner_rkhs(v, h, kernel=K):
+    """Compute <K*v, h> using convolution K * v """
+
+    Kv = Convolution(kernel)(v)
+    space = odl.rn(v.shape, device=v.device, dtype=v.dtype)
+    inner = space.inner(space.element(Kv), space.element(h))
+    return inner
+
+
+
+# print('U inner product <v, v>=', U.inner(u, u))
+print('V inner product <Kv, v>=', V.inner(v, v))
+
 if __name__ == '__main__':
     H, W = 64, 64
     impl = 'pytorch'
     device= 'cpu'
+    sigma = 0.1
 
     ## We begin by creating the input space
     space = odl.uniform_discr(
         [-1,-1],[1,1],[H, W], impl=impl, device=device
         )
-    
+    K = space.element(lambda x: odl.exp(-x**2/sigma))
+    kernel = Convolution(K)
+    inner = lambda v, h: space.inner(kernel(v), h)
+    V = odl.uniform_discr(
+        [-1,-1],[1,1],[H, W], impl=impl, device=device
+        , inner=inner)
     template, displacement = compute_template_and_displacement(space)
     
     deformation_operator = LinDeformFixedTempl(
@@ -175,6 +207,26 @@ if __name__ == '__main__':
     plt.clf()
     plt.matshow(deformed.asarray())
     plt.savefig(f'{impl}_deformed')
+
+    L2 = odl.uniform_discr(
+        [-1,-1],[1,1],[H, W], impl=impl, device=device
+        )
+
+    G = lambda x: np.exp(-(x[0]**2.0  + x[1]**2)/sigma)
+
+    K = L2.element(G)
+
+
+    HV = odl.uniform_discr([-1,-1], [1,1], [H, W], impl=impl, device=device, weighting=odl.space_weighting(impl=impl, inner=inner_rkhs))
+
+    V = HV.tangent_bundle
+    U = space.tangent_bundle
+
+    u = U.one()
+    v = V.one()
+
+    print('U inner product <v, v>=', U.inner(u, u))
+    print('V inner product <Kv, v>=', V.inner(v, v))
 
     # does not work as is
     # plt.figure(figsize=(10,4))
