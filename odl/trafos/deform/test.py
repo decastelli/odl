@@ -222,6 +222,13 @@ if __name__ == '__main__':
     print('U inner product <v, v>=', U.inner(u, u))
     print('V inner product <Kv, v>=', V.inner(v, v))
 
+    Nt = 30
+
+    L2T_V = odl.ProductSpace(V, Nt, weighting=1/Nt)
+
+    vt = L2T_V.one()
+    print("inner(F,F) approx integral:", L2T_V.inner(vt, vt))
+
     # does not work as is
     # plt.figure(figsize=(10,4))
     # plt.subplot(1,3,1); plt.title("Original ellipse"); plt.imshow(template.asarray(), cmap='gray'); plt.axis('off')
