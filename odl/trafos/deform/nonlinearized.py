@@ -515,7 +515,7 @@ class LDDMMFixedTempl(Operator):
             return the_space.element([defor(v[1]), defor(v[0])])
         
         W = action(template)
-        S = integrator(compose, domain.element([lambda x, i=i: x[i] for i in range(I0.space.ndim)]), Nt, domain=domain)
+        S = integrator(compose, domain.element([lambda x, i=i: x[i] for i in range(template.space.ndim)]), Nt, domain=domain)
 
         
         self.operator = W @ S
