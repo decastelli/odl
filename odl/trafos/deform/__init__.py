@@ -11,6 +11,8 @@
 from __future__ import absolute_import
 
 from .linearized import *
+from .nonlinearized import *
 
 __all__ = ()
 __all__ += linearized.__all__
+__all__ += nonlinearized.__all__
